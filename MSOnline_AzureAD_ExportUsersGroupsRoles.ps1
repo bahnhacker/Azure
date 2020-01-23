@@ -23,9 +23,7 @@ if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 #>
 
-
 ########################################################################################################################
-
 ## custom variables 
 $domain = Read-Host -Prompt "provide a shortname for the domain"
 
@@ -54,13 +52,18 @@ $select_path = Select-FolderDialog
 ## PS variables
 $date = Get-Date -f yyyyMM
 
+########################################################################################################################
+## required PSmodules
+if (Get-Module -ListAvailable -Name MSOnline) {
+    Connect-MsolService
+} 
+else {
+    Write-Host "Installing the MSOnline Powershell Module"
+    Install-Module MSOnline -AllowClobber -Scope AllUsers
+    Connect-MsolService
+    }
 
 ########################################################################################################################
-#Install-Module MSOnline
-
-## connect to msol service
-Connect-MsolService
-
 $filename = ("$date" + "-AzAD-" + "$domain")
 $path = New-Item -ItemType "directory" -Path "$select_path\$filename" ## creates root
 
@@ -75,8 +78,6 @@ $excel = New-Object -ComObject excel.application
 $workbook = $excel.Workbooks.Add()
 $exportfilename = ("$date" + "_" + "$domain" + "_" + "AzureAD_UsersGroupsRoles.xlsx")
 
-
-########################################################################################################################
 ## creates all users csv
 $allusers = ("$path" + "\" + "$date" + "-" + "$domain" + "-AzAD-AllUsersReport.csv")
 Get-MSOLUser -All | Select-Object DisplayName, FirstName, LastName, SignInName, userprincipalname, Department, StreetAddress, City, State, Country, Office, MobilePhone | Export-Csv $allusers
@@ -184,8 +185,6 @@ function Create-UserWorksheet {
         }
 }
 
-
-########################################################################################################################
 ## creates all group csv
 $allgroups = ("$path" + "\" + "$date" + "-" + "$domain" + "-AzAD-AllGroupsReport.csv")
 Get-MsolGroup -All | Select-Object CommonName, Description, DisplayName, EmailAddress, GroupType, ManagedBy | Export-Csv $allgroups
@@ -248,15 +247,12 @@ function Create-GroupWorksheet {
         }
 }
 
-
-########################################################################################################################
 ## calling function
 Create-UserWorksheet
 Create-GroupWorksheet
 
 ## Saving the excel file
 $workbook.SaveAs("$Path\$exportfilename")
-
 
 Write-Host "files are saved at - $select_path\$filename `n" -ForegroundColor Green
 

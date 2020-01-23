@@ -24,45 +24,56 @@ if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 
 
 ########################################################################################################################
-## imports the users csv
-Write-Host "select the USERS.csv file..." -ForegroundColor Green
 
-Function Get-FileName($InitialDirectory)
-{
-    [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
+## PS variables
+$date = Get-Date -f yyyy-MM-dd
+$datefull = Get-Date -f yyyyMMdd-hhmm
 
-  $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
-  $OpenFileDialog.initialDirectory = $initialDirectory
-  $OpenFileDialog.filter = "CSV (*.csv) | *.csv"
-  $OpenFileDialog.ShowDialog() | Out-Null
-}
+########################################################################################################################
+## required PSmodules
+if (Get-Module -ListAvailable -Name MSOnline) {
+    Connect-MsolService
+} 
+else {
+    Write-Host "Installing the MSOnline Powershell Module"
+    Install-Module MSOnline -AllowClobber -Scope AllUsers
+    Connect-MsolService
+    }
 
-$userscsv = Get-FileName
-
-$users = Import-Csv "$userscsv"
-$users | ForEach-Object {
-New-MsolUser -DisplayName $_.DisplayName -FirstName $_.FirstName -LastName $_.LastName -UserPrincipalName $_.UserPrincipalName -Department $_.Department -StreetAddress $_.StreetAddress -City $_.city -State $_.State -Country $_.Country -Office $_.Office -MobilePhone $_.MobilePhone
+if (Get-Module -ListAvailable -Name AzureAD) {
+    Import-Module AzureAD
+} 
+else {
+    Write-Host "Installing the AzureAD Powershell Module"
+    Install-Module AzureAD -AllowClobber -Scope AllUsers
 }
 
 ########################################################################################################################
-## imports the groups csv
-Write-Host "select the GROUPS.csv file..." -ForegroundColor Green
+## creates import group
+$importgroup = ("Import-" + "$datefull")
 
-Function Get-FileName($InitialDirectory)
-{
-    [System.Reflection.Assembly]::LoadWithPartialName("System.windows.forms") | Out-Null
+New-MsolGroup -DisplayName "$importgroup" -Description "This group contains all users imported on $date"
+$grpobjid = Get-MsolGroup | Where-Object {$_.DisplayName -eq “$importgroup”} | select -Property ObjectId
 
-  $OpenFileDialog = New-Object System.Windows.Forms.OpenFileDialog
-  $OpenFileDialog.initialDirectory = $initialDirectory
-  $OpenFileDialog.filter = "CSV (*.csv) | *.csv"
-  $OpenFileDialog.ShowDialog() | Out-Null
+## creates password file
+$PasswordProfile = New-Object -TypeName Microsoft.Open.AzureAD.Model.PasswordProfile
+$PasswordProfile.Password = Read-Host "input the password to be used for ALL imported accounts"
+
+## imports the users from csv
+$usercsv = Read-Host "provide the FULL path\name.csv for the users file"
+
+Import-Csv $usercsv | ForEach-Object {
+New-MsolUser -DisplayName $_.DisplayName -FirstName $_.FirstName -LastName $_.LastName -UserPrincipalName $_.UserPrincipalName -Department $_.Department -StreetAddress $_.StreetAddress -City $_.city -State $_.State -Country $_.Country -Office $_.Office -MobilePhone $_.MobilePhone -Password $PasswordProfile.Passwor
+$displayname = $_.DisplayName
+$usrobjid = Get-MsolUser | Where-Object {$_.DisplayName -eq “$displayname”} | select -Property ObjectId
+Add-MsolGroupMember -GroupObjectId $grpobjid.ObjectId -GroupMemberObjectId $usrobjid.ObjectId -GroupMemberType User 
 }
 
-$groupscsv = Get-FileName
+## imports the groups from csv
+$groupscsv = Read-Host "provide the FULL path\name.csv for the groups file"
 
-$groups = Import-Csv "$groupscsv"
-$groups | ForEach-Object {
-New-MsolGroup -DisplayName $_.DisplayName -Description $_.Description -ManagedBy $_.ManagedBy
+Import-Csv $groupscsv | ForEach-Object {
+New-MsolGroup -DisplayName $_.DisplayName -Description $_.Description
 }
 
 
