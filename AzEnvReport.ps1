@@ -3,7 +3,10 @@
 ## variables: set via prompts during execution
 ##
 ##
-## created/modified: 202004
+## created/modified: 202005
+## change log:
+## 202004 - created
+## 20200504 - ad records expanding to include all objects
 ########################################################################################################################
 ########################################################################################################################
 <#
@@ -100,14 +103,14 @@ foreach ($line in $item){
 
     }
 }
-Get-AzureADUser | Select-Object -Property DisplayName,MailNickName,UserPrincipalName,DirSyncEnabled,UserType,ObjectId | Export-Excel -Path $wkbk -WorksheetName "AAD-Usr" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize
-Get-AzureADGroup | Select-Object -Property DisplayName,Description,MailEnabled,MailNickname,DirSyncEnabled,ObjectId | Export-Excel -Path $wkbk -WorksheetName "AAD-Grp" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize
+Get-AzureADUser -All $true | Select-Object -Property DisplayName,MailNickName,UserPrincipalName,DirSyncEnabled,UserType,ObjectId | Export-Excel -Path $wkbk -WorksheetName "AAD-Usr" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize
+Get-AzureADGroup -All $true | Select-Object -Property DisplayName,Description,MailEnabled,MailNickname,DirSyncEnabled,ObjectId | Export-Excel -Path $wkbk -WorksheetName "AAD-Grp" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize
 $item = Import-Excel -Path $wkbk -WorksheetName "AAD-Grp"
 foreach ($line in $item){
-    $value = Get-AzureADGroupMember -ObjectId $line.ObjectId | Where-Object {$_.DirSyncEnabled -eq $null} 
+    $value = Get-AzureADGroup -ObjectId $line.ObjectId | Where-Object {$_.DirSyncEnabled -eq $null} 
     if ($value -ne $null)
     {
-        Get-AzureADGroupMember -ObjectId $line.ObjectId `
+        Get-AzureADGroupMember -ObjectId $line.ObjectId -All $true `
         | Select-Object @{n="Group";e={$line.DisplayName -join ","}},DisplayName,UserPrincipalName,ObjectId `
         | Export-Excel -Path $wkbk -WorksheetName "AAD-GrpMbr" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
     }
