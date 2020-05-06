@@ -7,6 +7,7 @@
 ## change log:
 ## 202004 - created
 ## 20200504 - ad records expanding to include all objects, added additional if statements to skip null results to resolve errors
+## 20200506 - null expressions corrected, vnet variable added to resolve errors
 ########################################################################################################################
 ########################################################################################################################
 <#
@@ -95,7 +96,7 @@ Get-AzureADDirectoryRole | Select-Object -Property DisplayName,Description,Objec
 $item = Import-Excel -Path $wkbk -WorksheetName "Roles"
 foreach ($line in $item){
     $value = Get-AzureADDirectoryRoleMember -ObjectId $line.ObjectId
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzureADDirectoryRoleMember -ObjectId $line.ObjectId `
         | Select-Object @{n="AzureAD Role";e={$line.DisplayName -join ","}},DisplayName,UserPrincipalName,ObjectId `
@@ -108,7 +109,7 @@ Get-AzureADGroup -All $true | Select-Object -Property DisplayName,Description,Ma
 $item = Import-Excel -Path $wkbk -WorksheetName "AAD-Grp"
 foreach ($line in $item){
     $value = Get-AzureADGroup -ObjectId $line.ObjectId | Where-Object {$_.DirSyncEnabled -eq $null} 
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzureADGroupMember -ObjectId $line.ObjectId -All $true `
         | Select-Object @{n="Group";e={$line.DisplayName -join ","}},DisplayName,UserPrincipalName,ObjectId `
@@ -122,7 +123,6 @@ Get-AzManagementGroup -GroupName $ten_name -Expand -Recurse | Select-Object -Pro
 (Get-AzManagementGroup -GroupName $ten_name -Expand -Recurse).Children | Select-Object -Property DisplayName,Name,Type,ID | Export-Excel -Path $wkbk -WorksheetName "MG" -BoldTopRow -FreezeTopRow -AutoSize -Append
 # IF the above two cmds fail, then the cliet has multiple management groups directly under the Tenant Root. Run this cmd for each MG editing for the name of each MG: 
 # Get-AzManagementGroup -GroupName "Management Group Name" -Expand -Recurse | Select-Object -Property DisplayName,Name,Type,ID | Export-Excel -Path $wkbk -WorksheetName "MG" -BoldTopRow -FreezeTopRow -AutoSize -Append
-
 $item = Import-Excel -Path $wkbk -WorksheetName "MG"
 foreach ($line in $item){
     Get-AzRoleAssignment -Scope $line.Id -IncludeClassicAdministrators `
@@ -142,7 +142,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     $value = Get-AzResourceGroup
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzResourceGroup `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},ResourceGroupName,Location,ResourceId `
@@ -162,7 +162,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -SubscriptionId $line.Id
     $value = Get-AzVirtualNetwork
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzVirtualNetwork `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,@{n="AddressSpace";e={$_.AddressSpace.AddressPrefixes -join ","}},EnableDdosProtection,DdosProtectionPlan,@{n="Peering Name";e={$_.VirtualNetworkPeerings.Name -join ","}},@{n="Peering State";e={$_.VirtualNetworkPeerings.PeeringState -join ","}},@{n="Peered Address";e={$_.VirtualNetworkPeerings.RemoteVirtualNetworkAddressSpace.AddressPrefixes -join ","}},Id `
@@ -173,10 +173,11 @@ $item = Import-Excel -Path $wkbk -WorksheetName "VNet"
 foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Subscription
-    $value = Get-AzVirtualNetworkSubnetConfig
-    if ($value -ne $null)
+    $vnet = (Get-AzVirtualNetwork -ResourceGroupName $line.ResourceGroupName -Name $line.Name)
+    $value = Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet
+    if ($null -ne $value)
     {
-        Get-AzVirtualNetworkSubnetConfig -VirtualNetwork (Get-AzVirtualNetwork -ResourceGroupName $line.ResourceGroupName -Name $line.Name) `
+        Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet `
         | Select-Object @{n="Subscription";e={$line.Subscription -join ","}},@{n="VNet";e={$line.Name -join ","}},Name,@{n="AddressPrefix";e={$_.AddressPrefix -join ","}},NatGateway,Id `
         | Export-Excel -Path $wkbk -WorksheetName "Subnet" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
     }
@@ -186,7 +187,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     $value = Get-AzNetworkSecurityGroup
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzNetworkSecurityGroup `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,ResourceGuid,Id `
@@ -198,7 +199,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Subscription
     $value = Get-AzNetworkSecurityGroup -Name $line.Name -ResourceGroupName $line.ResourceGroupName | Get-AzNetworkSecurityRuleConfig
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzNetworkSecurityGroup -Name $line.Name -ResourceGroupName $line.ResourceGroupName `
         | Get-AzNetworkSecurityRuleConfig | Select-Object @{n="Subscription";e={$line.Subscription -join ","}},@{n="NSG";e={$line.Name -join ","}},Name,Description,Protocol,@{n="SourcePortRange";e={$_.SourcePortRange -join ","}},@{n="DestinationPortRange";e={$_.DestinationPortRange -join ","}},@{n="SourceAddressPrefix";e={$_.SourceAddressPrefix -join ","}},@{n="DestinationAddressPrefix";e={$_.DestinationAddressPrefix -join ","}},@{n="SourceApplicationSecurityGroups";e={$_.SourceApplicationSecurityGroups -join ","}},@{n="DestinationApplicationSecurityGroups";e={$_.DestinationApplicationSecurityGroups -join ","}},Access,Priority,Direction `
@@ -210,7 +211,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     $value = Get-AzPublicIpAddress
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzPublicIpAddress `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,ResourceGuid,PublicIpAllocationMethod,IpAddress,@{n="DomainNameLabel";e={$_.DnsSettings.DomainNameLabel -join ","}},@{n="IpConfiguration";e={$_.IpConfiguration.Id -join ","}},Id `
@@ -224,7 +225,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     $value = Get-AzKeyVault
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzKeyVault `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},VaultName,ResourceGroupName,Location,ResourceId `
@@ -238,7 +239,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     $value = Get-AzAutomationAccount
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzAutomationAccount `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},AutomationAccountName,ResourceGroupName,Location `
@@ -252,7 +253,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     $value = Get-AzOperationalInsightsWorkspace
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzOperationalInsightsWorkspace `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,Sku,ResourceId `
@@ -266,7 +267,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     $value = Get-AzRecoveryServicesVault
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzRecoveryServicesVault `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,Type,ID `
@@ -280,7 +281,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     $value = Get-AzStorageAccount
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzStorageAccount `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},StorageAccountName,ResourceGroupName,PrimaryLocation,Kind,AccessTier,EnableHttpsTrafficOnly `
@@ -294,7 +295,7 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     $value = Get-AzVM
-    if ($value -ne $null)
+    if ($null -ne $value)
     {
         Get-AzVM `
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,@{n="VMSize";e={$_.HardwareProfile.VmSize -join ","}},@{n="OsType";e={$_.StorageProfile.OsDisk.OsType -join ","}},@{n="ImageType";e={$_.StorageProfile.ImageReference.Offer -join ","}},@{n="Image";e={$_.StorageProfile.ImageReference.Sku -join ","}},@{n="DiskName";e={$_.StorageProfile.OsDisk.Name -join ","}},@{n="Id";e={$_.Id -join ","}} `
