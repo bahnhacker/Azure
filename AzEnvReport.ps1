@@ -6,7 +6,7 @@
 ## created/modified: 202005
 ## change log:
 ## 202004 - created
-## 20200504 - ad records expanding to include all objects
+## 20200504 - ad records expanding to include all objects, added additional if statements to skip null results to resolve errors
 ########################################################################################################################
 ########################################################################################################################
 <#
@@ -118,7 +118,6 @@ foreach ($line in $item){
 
 ## FRAMEWORK ###########################################################################################################
 $ten_name = (Get-AzManagementGroup).Name
-$ten_id = (Get-AzManagementGroup).Id
 Get-AzManagementGroup -GroupName $ten_name -Expand -Recurse | Select-Object -Property DisplayName,Name,Type,ID | Export-Excel -Path $wkbk -WorksheetName "MG" -BoldTopRow -FreezeTopRow -AutoSize
 (Get-AzManagementGroup -GroupName $ten_name -Expand -Recurse).Children | Select-Object -Property DisplayName,Name,Type,ID | Export-Excel -Path $wkbk -WorksheetName "MG" -BoldTopRow -FreezeTopRow -AutoSize -Append
 # IF the above two cmds fail, then the cliet has multiple management groups directly under the Tenant Root. Run this cmd for each MG editing for the name of each MG: 
@@ -162,26 +161,37 @@ $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
     Select-AzSubscription -SubscriptionId $line.Id
-    Get-AzVirtualNetwork `
-    | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,@{n="AddressSpace";e={$_.AddressSpace.AddressPrefixes -join ","}},EnableDdosProtection,DdosProtectionPlan,@{n="Peering Name";e={$_.VirtualNetworkPeerings.Name -join ","}},@{n="Peering State";e={$_.VirtualNetworkPeerings.PeeringState -join ","}},@{n="Peered Address";e={$_.VirtualNetworkPeerings.RemoteVirtualNetworkAddressSpace.AddressPrefixes -join ","}},Id `
-    | Export-Excel -Path $wkbk -WorksheetName "VNet" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
-    
+    $value = Get-AzVirtualNetwork
+    if ($value -ne $null)
+    {
+        Get-AzVirtualNetwork `
+        | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,@{n="AddressSpace";e={$_.AddressSpace.AddressPrefixes -join ","}},EnableDdosProtection,DdosProtectionPlan,@{n="Peering Name";e={$_.VirtualNetworkPeerings.Name -join ","}},@{n="Peering State";e={$_.VirtualNetworkPeerings.PeeringState -join ","}},@{n="Peered Address";e={$_.VirtualNetworkPeerings.RemoteVirtualNetworkAddressSpace.AddressPrefixes -join ","}},Id `
+        | Export-Excel -Path $wkbk -WorksheetName "VNet" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
 }
 $item = Import-Excel -Path $wkbk -WorksheetName "VNet"
 foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Subscription
-    Get-AzVirtualNetworkSubnetConfig -VirtualNetwork (Get-AzVirtualNetwork -ResourceGroupName $line.ResourceGroupName -Name $line.Name) `
-    | Select-Object @{n="Subscription";e={$line.Subscription -join ","}},@{n="VNet";e={$line.Name -join ","}},Name,@{n="AddressPrefix";e={$_.AddressPrefix -join ","}},NatGateway,Id `
-    | Export-Excel -Path $wkbk -WorksheetName "Subnet" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    $value = Get-AzVirtualNetworkSubnetConfig
+    if ($value -ne $null)
+    {
+        Get-AzVirtualNetworkSubnetConfig -VirtualNetwork (Get-AzVirtualNetwork -ResourceGroupName $line.ResourceGroupName -Name $line.Name) `
+        | Select-Object @{n="Subscription";e={$line.Subscription -join ","}},@{n="VNet";e={$line.Name -join ","}},Name,@{n="AddressPrefix";e={$_.AddressPrefix -join ","}},NatGateway,Id `
+        | Export-Excel -Path $wkbk -WorksheetName "Subnet" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
 }
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
-    Get-AzNetworkSecurityGroup `
-    | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,ResourceGuid,Id `
-    | Export-Excel -Path $wkbk -WorksheetName "NSG" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    $value = Get-AzNetworkSecurityGroup
+    if ($value -ne $null)
+    {
+        Get-AzNetworkSecurityGroup `
+        | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,ResourceGuid,Id `
+        | Export-Excel -Path $wkbk -WorksheetName "NSG" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
 }
 $item = Import-Excel -Path $wkbk -WorksheetName "NSG"
 foreach ($line in $item)
@@ -199,9 +209,13 @@ $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
-    Get-AzPublicIpAddress `
-    | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,ResourceGuid,PublicIpAllocationMethod,IpAddress,@{n="DomainNameLabel";e={$_.DnsSettings.DomainNameLabel -join ","}},@{n="IpConfiguration";e={$_.IpConfiguration.Id -join ","}},Id `
-    | Export-Excel -Path $wkbk -WorksheetName "PubIP" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    $value = Get-AzPublicIpAddress
+    if ($value -ne $null)
+    {
+        Get-AzPublicIpAddress `
+        | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,ResourceGuid,PublicIpAllocationMethod,IpAddress,@{n="DomainNameLabel";e={$_.DnsSettings.DomainNameLabel -join ","}},@{n="IpConfiguration";e={$_.IpConfiguration.Id -join ","}},Id `
+        | Export-Excel -Path $wkbk -WorksheetName "PubIP" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
 }
 
 ## KEY VAULT ###########################################################################################################
