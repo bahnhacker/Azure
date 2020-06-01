@@ -53,7 +53,7 @@ else {
 
 ## variables ###########################################################################################################
 $client = Read-Host -Prompt "Client Name?"
-$dirid = "a9ceff7b-d9ed-4c57-b871-ad7076d42c12" #Read-Host -Prompt "TenantID or AzureAD DirectoryID?"
+$dirid = Read-Host -Prompt "TenantID or AzureAD DirectoryID?"
 
 Function Select-FolderDialog  ## prompts user to select file location
 {
