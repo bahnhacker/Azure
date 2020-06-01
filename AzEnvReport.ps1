@@ -5,6 +5,7 @@
 ##
 ## created/modified: 202005
 ## change log:
+## 20200601 - updated information included on the tabs for AzFramework and AzNetworking, added Disks tab
 ## 20200515 - restructure of how management group data is pulled, addition of AzFramework and AzNetworking worksheets
 ## 20200506 - null expressions corrected, vnet variable added to resolve errors
 ## 20200504 - ad records expanding to include all objects, added additional if statements to skip null results to resolve errors
@@ -52,7 +53,7 @@ else {
 
 ## variables ###########################################################################################################
 $client = Read-Host -Prompt "Client Name?"
-$dirid = Read-Host -Prompt "TenantID or AzureAD DirectoryID?"
+$dirid = "a9ceff7b-d9ed-4c57-b871-ad7076d42c12" #Read-Host -Prompt "TenantID or AzureAD DirectoryID?"
 
 Function Select-FolderDialog  ## prompts user to select file location
 {
@@ -84,8 +85,8 @@ $wkbk = "$select_path\$outputfilename.xlsx"
 ########### start of script ########## start of script ########## start of script ########## start of script ###########
 ########################################################################################################################
 $creds = Get-Credential
-Connect-AzAccount -Tenant $dirid -Credential $creds
-Connect-AzureAD -TenantId $dirid -Credential $creds
+Connect-AzAccount -Tenant $dirid -Credential $creds #-EnvironmentName AzureUSGovernment
+Connect-AzureAD -TenantId $dirid -Credential $creds #-AzureEnvironmentName AzureUSGovernment
 
 ## AZURE AD ############################################################################################################
 Get-AzureADDirectoryRole | Select-Object -Property DisplayName,Description,ObjectID | Export-Excel -Path $wkbk -WorksheetName "Roles" -BoldTopRow -FreezeTopRow -AutoSize
@@ -131,7 +132,7 @@ if($answer -eq 6){
     foreach ($line in $item){
         if ($line.Type -ne "/subscriptions"){
             Get-AzManagementGroup -GroupName $line.Name -Expand -Recurse `
-            | Select-Object @{n="ResourceType";e={"MG" -join ","}},@{n="ResourceName";e={$_.DisplayName -join ","}},@{n="ParentName";e={$_.ParentDisplayName -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={""}},@{n="Id";e={$_.Id}} `
+            | Select-Object @{n="ResourceType";e={"MG" -join ","}},@{n="ResourceName";e={$_.DisplayName -join ","}},@{n="ParentName";e={$_.ParentDisplayName -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={""}},@{n="Id";e={$_.Id}},@{n="ParentID";e={""}} `
             | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
         }
     }
@@ -155,12 +156,11 @@ if($answer -eq 6){
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item){
     Get-AzSubscription -TenantId $dirid -SubscriptionId $line.Id `
-        | Select-Object @{n="ResourceType";e={"Sub" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={"$parent" -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={$_.State}},@{n="Id";e={$line.Id}} `
+        | Select-Object @{n="ResourceType";e={"Sub" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={"$parent" -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={$_.State}},@{n="Id";e={$line.Id}},@{n="ParentID";e={""}} `
         | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     Get-AzSubscription -TenantId $dirid -SubscriptionId $line.Id `
-        | Select-Object @{n="ResourceType";e={"Sub" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={"" -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={$_.State}},@{n="Id";e={$line.Id}} `
+        | Select-Object @{n="ResourceType";e={"Sub" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={"" -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={$_.State}},@{n="Id";e={$line.Id}},@{n="ParentID";e={""}} `
         | Export-Excel -Path $wkbk -WorksheetName "AzNetworking" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
-
 }
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item){
@@ -180,9 +180,8 @@ foreach ($line in $item)
             | Select-Object @{n="Subscription";e={$line.Name -join ","}},ResourceGroupName,Location,ResourceId `
             | Export-Excel -Path $wkbk -WorksheetName "RG" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
         Get-AzResourceGroup `
-            | Select-Object @{n="ResourceType";e={"RG" -join ","}},@{n="ResourceName";e={$_.ResourceGroupName -join ","}},@{n="ParentName";e={$line.Name -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={$_.ResourceId}} `
+            | Select-Object @{n="ResourceType";e={"RG" -join ","}},@{n="ResourceName";e={$_.ResourceGroupName -join ","}},@{n="ParentName";e={$line.Name -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={$_.ResourceId}},@{n="ParentID";e={$line.Id -join ","}} `
             | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
-
     }
 }
 $item = Import-Excel -Path $wkbk -WorksheetName "RG"
@@ -204,10 +203,10 @@ foreach ($line in $item)
             | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,@{n="AddressSpace";e={$_.AddressSpace.AddressPrefixes -join ","}},@{n="DNS";e={$_.DhcpOptions.DnsServers -join ","}},EnableDdosProtection,DdosProtectionPlan,@{n="Peering Name";e={$_.VirtualNetworkPeerings.Name -join ","}},@{n="Peering State";e={$_.VirtualNetworkPeerings.PeeringState -join ","}},@{n="Peered Address";e={$_.VirtualNetworkPeerings.RemoteVirtualNetworkAddressSpace.AddressPrefixes -join ","}},Id `
             | Export-Excel -Path $wkbk -WorksheetName "VNet" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
         Get-AzVirtualNetwork `
-            | Select-Object @{n="ResourceType";e={"VNet" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.AddressSpace.AddressPrefixes}},@{n="Id";e={$_.Id}} `
+            | Select-Object @{n="ResourceType";e={"VNet" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.AddressSpace.AddressPrefixes}},@{n="Id";e={$_.Id}},@{n="ParentID";e={(Get-AzResourceGroup -Name $_.ResourceGroupName).ResourceId -join ","}} `
             | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
         Get-AzVirtualNetwork `
-            | Select-Object @{n="ResourceType";e={"VNet" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$line.Name -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.AddressSpace.AddressPrefixes}},@{n="Id";e={$_.Id}} `
+            | Select-Object @{n="ResourceType";e={"VNet" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$line.Name -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.AddressSpace.AddressPrefixes}},@{n="Id";e={$_.Id}},@{n="ParentID";e={$line.Id -join ","}} `
             | Export-Excel -Path $wkbk -WorksheetName "AzNetworking" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
@@ -223,10 +222,10 @@ foreach ($line in $item)
             | Select-Object @{n="Subscription";e={$line.Subscription -join ","}},@{n="VNet";e={$line.Name -join ","}},Name,@{n="AddressPrefix";e={$_.AddressPrefix -join ","}},NatGateway,Id `
             | Export-Excel -Path $wkbk -WorksheetName "Subnet" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
         Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet `
-            | Select-Object @{n="ResourceType";e={"Subnet" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$line.Name -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={$_.AddressPrefix -join ","}},@{n="Id";e={$_.Id}} `
+            | Select-Object @{n="ResourceType";e={"Subnet" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$line.Name -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={$_.AddressPrefix -join ","}},@{n="Id";e={$_.Id}},@{n="ParentID";e={$line.Id -join ","}} `
             | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
         Get-AzVirtualNetworkSubnetConfig -VirtualNetwork $vnet `
-            | Select-Object @{n="ResourceType";e={"Subnet" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$line.Name -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={$_.AddressPrefix -join ","}},@{n="Id";e={$_.Id}} `
+            | Select-Object @{n="ResourceType";e={"Subnet" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$line.Name -join ","}},@{n="AzRegion";e={""}},@{n="Info";e={$_.AddressPrefix -join ","}},@{n="Id";e={$_.Id}},@{n="ParentID";e={$line.Id -join ","}} `
             | Export-Excel -Path $wkbk -WorksheetName "AzNetworking" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
@@ -279,7 +278,7 @@ foreach ($line in $item)
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},VaultName,ResourceGroupName,Location,ResourceId `
         | Export-Excel -Path $wkbk -WorksheetName "KeyVault" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
         Get-AzKeyVault `
-        | Select-Object @{n="ResourceType";e={"KV" -join ","}},@{n="ResourceName";e={$_.VaultName -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={$_.ResourceId}} `
+        | Select-Object @{n="ResourceType";e={"KV" -join ","}},@{n="ResourceName";e={$_.VaultName -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={$_.ResourceId}},@{n="ParentID";e={$line.Id -join ","}} `
         | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
@@ -296,7 +295,7 @@ foreach ($line in $item)
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},AutomationAccountName,ResourceGroupName,Location `
         | Export-Excel -Path $wkbk -WorksheetName "Auto" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
         Get-AzAutomationAccount `
-        | Select-Object @{n="ResourceType";e={"Auto" -join ","}},@{n="ResourceName";e={$_.AutomationAccountName -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={""}} `
+        | Select-Object @{n="ResourceType";e={"Auto" -join ","}},@{n="ResourceName";e={$_.AutomationAccountName -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={("/subscriptions/" + $line.id + "/resourceGroups/" + $_.ResourceGroupName + "/providers/Microsoft.Automation/" + $_.AutomationAccountName) -join ","}},@{n="ParentID";e={$line.Id -join ","}} `
         | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
@@ -313,7 +312,7 @@ foreach ($line in $item)
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,Sku,ResourceId `
         | Export-Excel -Path $wkbk -WorksheetName "LogAnalytics" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
         Get-AzOperationalInsightsWorkspace `
-        | Select-Object @{n="ResourceType";e={"LA" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.Sku -join ","}},@{n="Id";e={$_.ResourceId}} `
+        | Select-Object @{n="ResourceType";e={"LA" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.Sku -join ","}},@{n="Id";e={$_.ResourceId}},@{n="ParentID";e={$line.Id -join ","}} `
         | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
@@ -330,7 +329,7 @@ foreach ($line in $item)
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,Type,ID `
         | Export-Excel -Path $wkbk -WorksheetName "RecoveryVault" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
         Get-AzRecoveryServicesVault `
-        | Select-Object @{n="ResourceType";e={"Vault" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.Type -join ","}},@{n="Id";e={$_.ID}} `
+        | Select-Object @{n="ResourceType";e={"Vault" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.Type -join ","}},@{n="Id";e={$_.ID}},@{n="ParentID";e={$line.Id -join ","}} `
         | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
@@ -361,6 +360,17 @@ foreach ($line in $item)
         | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,@{n="VMSize";e={$_.HardwareProfile.VmSize -join ","}},@{n="OsType";e={$_.StorageProfile.OsDisk.OsType -join ","}},@{n="ImageType";e={$_.StorageProfile.ImageReference.Offer -join ","}},@{n="Image";e={$_.StorageProfile.ImageReference.Sku -join ","}},@{n="DiskName";e={$_.StorageProfile.OsDisk.Name -join ","}},@{n="Id";e={$_.Id -join ","}} `
         | Export-Excel -Path $wkbk -WorksheetName "VM" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
     }
+}
+
+## DISKS ###############################################################################################################
+$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
+foreach ($line in $item)
+{
+    Select-AzSubscription -Subscription $line.Id
+    Get-AzDisk `
+    | Select-Object -Property @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,DiskSizeGB,DiskState,DiskIOPSReadWrite,DiskMBpsReadWrite,Encryption,Location,Sku,ManagedBy,UniqueID,Id `
+    | Export-Excel -Path $wkbk -WorksheetName "Disks" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+
 }
 
 ## POLICY ##############################################################################################################
