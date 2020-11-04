@@ -1,10 +1,10 @@
 ## script captures configurations and settings for key features and services in azure
+## the script is intended to be ran as a whole and will pause for data verification at key points
 ##
 ## variables: set via prompts during execution
 ##
-##
-##
 ## change log:
+## 202011 - restructured, updated, modules added for Security Center and Advisor
 ## 202006 - updated information included on the tabs for AzFramework and AzNetworking, added Disks, added BackupPolicies, added conditional formatting throughout
 ## 20200515 - restructure of how management group data is pulled, addition of AzFramework and AzNetworking worksheets
 ## 20200506 - null expressions corrected, vnet variable added to resolve errors
@@ -22,39 +22,26 @@ if (-Not ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdent
 }
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Force
 #>
-
-## required PSmodules ##################################################################################################
-if (Get-Module -ListAvailable -Name ImportExcel) {
-    Import-Module ImportExcel
-} 
-else {
-    Write-Host "Installing the ImportExcel Module"
-    Install-Module ImportExcel -AllowClobber -Scope AllUsers
-    Import-Module ImportExcel
-}
-
-if (Get-Module -ListAvailable -Name Az) {
-    Import-Module Az
-} 
-else {
-    Write-Host "Installing the Az Module"
-    Install-Module Az -AllowClobber -Scope AllUsers
-    Import-Module Az
-}
-
-if (Get-Module -ListAvailable -Name AzureAD) {
-    Import-Module AzureAD
-} 
-else {
-    Write-Host "Installing the AzureAD Module"
-    Install-Module AzureAD -AllowClobber -Scope AllUsers
-    Import-Module AzureAD
-}
-
-## variables ###########################################################################################################
+########################################################################################################################
+########### start of script ########## start of script ########## start of script ########## start of script ###########
+########################################################################################################################
+Import-Module Az
+Import-Module AzureAD
+Import-Module ImportExcel
+Set-Item Env:\SuppressAzurePowerShellBreakingChangeWarnings "true"
 $client = Read-Host -Prompt "Client Name?"
 $dirid = Read-Host -Prompt "TenantID or AzureAD DirectoryID?"
-
+$creds = Get-Credential
+$wshell = New-Object -ComObject Wscript.Shell
+  $answer = $wshell.Popup("Is the Azure enviornment commercial cloud?",0,"Alert",0x4)
+if($answer -eq 6){
+    Connect-AzAccount -Tenant $dirid -Credential $creds
+    Connect-AzureAD -TenantId $dirid -Credential $creds
+    }
+if($answer -eq 7){
+    Connect-AzAccount -Tenant $dirid -Credential $creds -EnvironmentName AzureUSGovernment
+    Connect-AzureAD -TenantId $dirid -Credential $creds -AzureEnvironmentName AzureUSGovernment
+    }
 Function Select-FolderDialog  ## prompts user to select file location
 {
     param([string]$Description="Select the location to save the file",[string]$RootFolder="Desktop")
@@ -76,19 +63,16 @@ Function Select-FolderDialog  ## prompts user to select file location
         }
     }
 $select_path = Select-FolderDialog
-
 $date = Get-Date -f yyyyMMdd
 $outputfilename = ("$client" + "-AzEnvReport-" + $date)
 $wkbk = "$select_path\$outputfilename.xlsx"
-
-########################################################################################################################
-########### start of script ########## start of script ########## start of script ########## start of script ###########
-########################################################################################################################
-$creds = Get-Credential
-Connect-AzAccount -Tenant $dirid -Credential $creds #-EnvironmentName AzureUSGovernment
-Connect-AzureAD -TenantId $dirid -Credential $creds #-AzureEnvironmentName AzureUSGovernment
-
-## AZURE AD ############################################################################################################
+$wshell = New-Object -ComObject Wscript.Shell
+    $wshell.Popup("The script will pause at set points and launch the output file for verification. After confirming valid output, close the workbook then return to the PS prompt to Continue.",0,"Alert",0x0)
+$ButtonType = [System.Windows.MessageBoxButton]::YesNo
+$MessageboxTitle = "scan paused..."
+$Messageboxbody = "Please verify data within the report. Do you want to continue?"
+$MessageIcon = [System.Windows.MessageBoxImage]::Warning
+#### AZURE AD ######################## AZURE AD ######################## AZURE AD ######################## AZURE AD ####
 Get-AzureADDirectoryRole | Select-Object -Property DisplayName,Description,ObjectID | Export-Excel -Path $wkbk -WorksheetName "Roles" -BoldTopRow -FreezeTopRow -AutoSize
 $item = Import-Excel -Path $wkbk -WorksheetName "Roles"
 foreach ($line in $item){
@@ -112,8 +96,10 @@ foreach ($line in $item){
         | Export-Excel -Path $wkbk -WorksheetName "AAD-GrpMbr" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
     }
 }
-
-## FRAMEWORK ###########################################################################################################
+Invoke-Item $wkbk
+[System.Windows.MessageBox]::Show($Messageboxbody,$MessageboxTitle,$ButtonType,$messageicon)
+#### MANAGEMENT HIERARCHY ######## MANAGEMENT HIERARCHY ######## MANAGEMENT HIERARCHY ######## MANAGEMENT HIERARCHY ####
+## MANAGEMENT GROUP ####################################################################################################
 $wshell = New-Object -ComObject Wscript.Shell
   $answer = $wshell.Popup("Does the client use Azure Management Groups?",0,"Alert",0x4)
 if($answer -eq 6){
@@ -144,6 +130,7 @@ if($answer -eq 6){
         }
     }
 } 
+## SUBSCRIPTION ########################################################################################################
 Get-AzSubscription -TenantId $dirid `
     | Select-Object -Property Name,ID,TenantId,State `
     | Export-Excel -Path $wkbk -WorksheetName "Sub" -BoldTopRow -FreezeTopRow -AutoSize
@@ -152,7 +139,7 @@ if($answer -eq 6){
     $parentID = "UPDATE REQUIRED"
 } else {
     $parent = "Tenant Root Group"
-    $parentID = (Get-AzManagementGroup).Id
+    $parentID = "Tenant Root Group"
 }
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item){
@@ -188,14 +175,17 @@ foreach ($line in $item)
             | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
+## RESOURCE GROUPS #####################################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "RG"
 foreach ($line in $item){
     Get-AzRoleAssignment -Scope $line.ResourceID `
     | Select-Object @{n="Subscription";e={$line.Subscription -join ","}},@{n="ResourceGroupName";e={$line.ResourceGroupName -join ","}},RoleDefinitionName,DisplayName,ObjectType,Scope `
     | Export-Excel -Path $wkbk -WorksheetName "RG-RBAC" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
 }
-
-## NETWORKING ##########################################################################################################
+Invoke-Item $wkbk
+[System.Windows.MessageBox]::Show($Messageboxbody,$MessageboxTitle,$ButtonType,$messageicon)
+#### NETWORKING ##################### NETWORKING ###################### NETWORKING ##################### NETWORKING ####
+## VIRTUAL NETWORK #####################################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
@@ -214,6 +204,7 @@ foreach ($line in $item)
             | Export-Excel -Path $wkbk -WorksheetName "AzNetworking" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
+## SUBNET ##############################################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "VNet"
 foreach ($line in $item)
 {
@@ -233,6 +224,7 @@ foreach ($line in $item)
             | Export-Excel -Path $wkbk -WorksheetName "AzNetworking" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
+## NETWORK SECURITY GROUPS #############################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
@@ -264,6 +256,7 @@ Export-Excel -Path $wkbk -WorksheetName "NSG-Rules" -ConditionalText $(
     New-ConditionalText -Range G:G -ConditionalType Equal -Text 5985 red
     New-ConditionalText -Range G:G -ConditionalType Equal -Text 5986 red
 )
+## PUBLIC IP ###########################################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
@@ -279,64 +272,9 @@ foreach ($line in $item)
 Export-Excel -Path $wkbk -WorksheetName "PubIP" -ConditionalText $(
     New-ConditionalText -Range G:G -ConditionalType Equal -Text "Not Assigned" green
 )
-
-## KEY VAULT ###########################################################################################################
-$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
-foreach ($line in $item)
-{
-    Select-AzSubscription -Subscription $line.Id
-    $value = Get-AzKeyVault
-    if ($null -ne $value)
-    {
-        Get-AzKeyVault `
-        | Select-Object @{n="Subscription";e={$line.Name -join ","}},VaultName,ResourceGroupName,Location,@{n="Sku";e={(Get-AzKeyVault -VaultName $_.VaultName -ResourceGroupName $_.ResourceGroupName).Sku -join ","}},ResourceId `
-        | Export-Excel -Path $wkbk -WorksheetName "KeyVault" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
-        Get-AzKeyVault `
-        | Select-Object @{n="ResourceType";e={"KV" -join ","}},@{n="ResourceName";e={$_.VaultName -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={$_.ResourceId}},@{n="ParentID";e={$line.Id -join ","}} `
-        | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
-    }
-}
-Export-Excel -Path $wkbk -WorksheetName "KeyVault" -ConditionalText $(
-    New-ConditionalText -Range E:E -ConditionalType Equal -Text "Premium" green
-)
-
-## AUTOMATION ACCOUNT ##################################################################################################
-$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
-foreach ($line in $item)
-{
-    Select-AzSubscription -Subscription $line.Id
-    $value = Get-AzAutomationAccount
-    if ($null -ne $value)
-    {
-        Get-AzAutomationAccount `
-        | Select-Object @{n="Subscription";e={$line.Name -join ","}},AutomationAccountName,ResourceGroupName,Location `
-        | Export-Excel -Path $wkbk -WorksheetName "Auto" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
-        Get-AzAutomationAccount `
-        | Select-Object @{n="ResourceType";e={"Auto" -join ","}},@{n="ResourceName";e={$_.AutomationAccountName -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={("/subscriptions/" + $line.id + "/resourceGroups/" + $_.ResourceGroupName + "/providers/Microsoft.Automation/" + $_.AutomationAccountName) -join ","}},@{n="ParentID";e={$line.Id -join ","}} `
-        | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
-    }
-}
-
-## LOG ANALYTICS #######################################################################################################
-$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
-foreach ($line in $item)
-{
-    Select-AzSubscription -Subscription $line.Id
-    $value = Get-AzOperationalInsightsWorkspace
-    if ($null -ne $value)
-    {
-        Get-AzOperationalInsightsWorkspace `
-        | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,Sku,@{n="RetentionInDays";e={(Get-AzOperationalInsightsWorkspace -Name $_.Name -ResourceGroupName $_.ResourceGroupName).retentionInDays -join ","}},ResourceId `
-        | Export-Excel -Path $wkbk -WorksheetName "LogAnalytics" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
-        Get-AzOperationalInsightsWorkspace `
-        | Select-Object @{n="ResourceType";e={"LA" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.Sku -join ","}},@{n="Id";e={$_.ResourceId}},@{n="ParentID";e={$line.Id -join ","}} `
-        | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
-    }
-}
-Export-Excel -Path $wkbk -WorksheetName "LogAnalytics" -ConditionalText $(
-    New-ConditionalText -Range F2:F999 -ConditionalType GreaterThanOrEqual -Text "90" green
-)
-
+Invoke-Item $wkbk
+[System.Windows.MessageBox]::Show($Messageboxbody,$MessageboxTitle,$ButtonType,$messageicon)
+#### COMPUTE & STORAGE ############ COMPUTE & STORAGE ############ COMPUTE & STORAGE ############ COMPUTE & STORAGE ####
 ## RECOVERY SERVICES VAULT #############################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
@@ -368,7 +306,6 @@ Export-Excel -Path $wkbk -WorksheetName "RV-BackupPolicies" -ConditionalText $(
     New-ConditionalText -Range K2:K999 -ConditionalType GreaterThan -Text "12" red
     New-ConditionalText -Range M2:M999 -ConditionalType GreaterThan -Text "1" red
 )
-
 ## STORAGE ACCOUNT #####################################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
@@ -382,7 +319,6 @@ foreach ($line in $item)
         | Export-Excel -Path $wkbk -WorksheetName "StorageAccount" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
     }
 }
-
 ## VIRTUAL MACHINE #####################################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
@@ -396,7 +332,6 @@ foreach ($line in $item)
         | Export-Excel -Path $wkbk -WorksheetName "VM" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
     }
 }
-
 ## DISKS ###############################################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
@@ -409,14 +344,70 @@ foreach ($line in $item)
 Export-Excel -Path $wkbk -WorksheetName "Disks" -ConditionalText $(
     New-ConditionalText -Range E2:E999 -ConditionalType Equal -Text "Unattached" green
 )
-
+Invoke-Item $wkbk
+[System.Windows.MessageBox]::Show($Messageboxbody,$MessageboxTitle,$ButtonType,$messageicon)
+#### GOVERNANCE ###################### GOVERNANCE #################### GOVERNANCE ###################### GOVERNANCE ####
+## LOG ANALYTICS #######################################################################################################
+$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
+foreach ($line in $item)
+{
+    Select-AzSubscription -Subscription $line.Id
+    $value = Get-AzOperationalInsightsWorkspace
+    if ($null -ne $value)
+    {
+        Get-AzOperationalInsightsWorkspace `
+        | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,Location,Sku,@{n="RetentionInDays";e={(Get-AzOperationalInsightsWorkspace -Name $_.Name -ResourceGroupName $_.ResourceGroupName).retentionInDays -join ","}},ResourceId `
+        | Export-Excel -Path $wkbk -WorksheetName "LogAnalytics" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+        Get-AzOperationalInsightsWorkspace `
+        | Select-Object @{n="ResourceType";e={"LA" -join ","}},@{n="ResourceName";e={$_.Name -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={$_.Sku -join ","}},@{n="Id";e={$_.ResourceId}},@{n="ParentID";e={$line.Id -join ","}} `
+        | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
+    }
+}
+Export-Excel -Path $wkbk -WorksheetName "LogAnalytics" -ConditionalText $(
+    New-ConditionalText -Range F2:F999 -ConditionalType GreaterThanOrEqual -Text "90" green
+)
+## AUTOMATION ACCOUNT ##################################################################################################
+$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
+foreach ($line in $item)
+{
+    Select-AzSubscription -Subscription $line.Id
+    $value = Get-AzAutomationAccount
+    if ($null -ne $value)
+    {
+        Get-AzAutomationAccount `
+        | Select-Object @{n="Subscription";e={$line.Name -join ","}},AutomationAccountName,ResourceGroupName,Location `
+        | Export-Excel -Path $wkbk -WorksheetName "Auto" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+        Get-AzAutomationAccount `
+        | Select-Object @{n="ResourceType";e={"Auto" -join ","}},@{n="ResourceName";e={$_.AutomationAccountName -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={("/subscriptions/" + $line.id + "/resourceGroups/" + $_.ResourceGroupName + "/providers/Microsoft.Automation/" + $_.AutomationAccountName) -join ","}},@{n="ParentID";e={$line.Id -join ","}} `
+        | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
+    }
+}
+## KEY VAULT ###########################################################################################################
+$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
+foreach ($line in $item)
+{
+    Select-AzSubscription -Subscription $line.Id
+    $value = Get-AzKeyVault
+    if ($null -ne $value)
+    {
+        Get-AzKeyVault `
+        | Select-Object @{n="Subscription";e={$line.Name -join ","}},VaultName,ResourceGroupName,Location,@{n="Sku";e={(Get-AzKeyVault -VaultName $_.VaultName -ResourceGroupName $_.ResourceGroupName).Sku -join ","}},ResourceId `
+        | Export-Excel -Path $wkbk -WorksheetName "KeyVault" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+        Get-AzKeyVault `
+        | Select-Object @{n="ResourceType";e={"KV" -join ","}},@{n="ResourceName";e={$_.VaultName -join ","}},@{n="ParentName";e={$_.ResourceGroupName -join ","}},@{n="AzRegion";e={$_.Location -join ","}},@{n="Info";e={""}},@{n="Id";e={$_.ResourceId}},@{n="ParentID";e={$line.Id -join ","}} `
+        | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
+    }
+}
+Export-Excel -Path $wkbk -WorksheetName "KeyVault" -ConditionalText $(
+    New-ConditionalText -Range E:E -ConditionalType Equal -Text "Premium" green
+)
 ## POLICY ##############################################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     Get-AzPolicyAssignment `
-    | Select-Object -Property Name,@{n="DisplayName";e={$_.Properties.displayName -join ","}},@{n="Enforcement";e={$_.Properties.enforcementMode -join ","}},@{n="Scope";e={$_.Properties.scope -join ","}},ResourceId `
+    | Select-Object -Property @{n="PolicyID";e={$_.Name -join ","}},@{n="DisplayName";e={$_.Properties.displayName -join ","}},@{n="Enforcement";e={$_.Properties.enforcementMode -join ","}},@{n="Scope";e={$_.Properties.scope -join ","}},ResourceId `
     | Export-Excel -Path $wkbk -WorksheetName "Policy" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
 }
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
@@ -424,13 +415,73 @@ foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
     Get-AzPolicyState `
-    | Select-Object -Property PolicyDefinitionReferenceId,IsCompliant,ComplianceState,PolicyDefinitionAction,PolicyDefinitionCategory,SubscriptionId,PolicyAssignmentScope,ResourceId `
+    | Select-Object -Property @{n="PolicyID";e={$_.PolicyAssignmentName -join ","}},PolicyDefinitionId,IsCompliant,ComplianceState,PolicyDefinitionAction,PolicyDefinitionCategory,SubscriptionId,PolicyAssignmentScope,ResourceId `
     | Export-Excel -Path $wkbk -WorksheetName "PolicyState" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
 }
-
 ## SECURITY CENTER #####################################################################################################
-
-
+Import-Module Az.Security
+$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
+foreach ($line in $item)
+{
+    Select-AzSubscription -Subscription $line.Id
+    $value = Get-AzSecurityContact
+    if ($null -ne $value)
+    {
+        Get-AzSecurityContact `
+        | Select-Object -Property @{n="Subscription";e={$line.Name -join ","}},@{n="ContactName";e={$_.Name -join ","}},Email,Phone `
+        | Export-Excel -Path $wkbk -WorksheetName "ASC-Contact" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
+    $value = Get-AzSecurityAutoProvisioningSetting
+    if ($null -ne $value)
+    {
+        Get-AzSecurityAutoProvisioningSetting `
+        | Select-Object -Property @{n="Subscription";e={$line.Name -join ","}},@{n="AutoProvisioningName";e={$_.Name -join ","}},Id `
+        | Export-Excel -Path $wkbk -WorksheetName "ASC-AutoProv" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
+    $value = Get-AzSecurityWorkspaceSetting
+    if ($null -ne $value)
+    {
+        Get-AzSecurityWorkspaceSetting `
+        | Select-Object -Property @{n="Subscription";e={$line.Name -join ","}},@{n="WorkspaceName";e={$_.Name -join ","}},Scope,WorkspaceId `
+        | Export-Excel -Path $wkbk -WorksheetName "ASC-Workspace" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
+    $value = Get-AzSecurityPricing
+    if ($null -ne $value)
+    {
+        Get-AzSecurityPricing `
+        | Select-Object -Property @{n="Subscription";e={$line.Name -join ","}},Name,PricingTier `
+        | Export-Excel -Path $wkbk -WorksheetName "ASC-Pricing" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
+    $SecurityTasks = Get-AzSecurityTask
+    if ($null -ne $SecurityTasks)
+    {
+        Get-AzSecurityTask `
+        | Select-Object -Property @{n="SubscriptionID";e={$line.Id -join ","}},@{n="Subscription";e={$line.Name -join ","}},RecommendationType,ResourceId `
+        | Export-Excel -Path $wkbk -WorksheetName "ASC-Tasks" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
+}
+## ADVISOR #############################################################################################################
+Import-Module Az.Advisor
+$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
+foreach ($line in $item)
+{
+    $Advisor = Get-AzAdvisorRecommendation
+    if ($null -ne $Advisor)
+    {
+        Get-AzAdvisorRecommendation `
+        | Select-Object -Property @{n="SubscriptionID";e={$line.Id -join ","}},@{n="Subscription";e={$line.Name -join ","}},Category,Impact,ImpactedValue,ResourceId `
+        | Export-Excel -Path $wkbk -WorksheetName "Advisor" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
+    $wshell = New-Object -ComObject Wscript.Shell
+    $wshell.Popup("There are Azure Advisor Recommendations available. You will need to use the Portal to download the complete report.",0,"Azure Advisor",0x0)
+    Export-Excel -Path $wkbk -WorksheetName "Advisor" -ConditionalText $(
+        New-ConditionalText -Range D:D -ConditionalType Equal -Text High red
+    )
+}
+########################################################################################################################
+$wshell = New-Object -ComObject Wscript.Shell
+    $wshell.Popup("The Azure Envioronment Report script has completed.",0,"***COMPLETE***",0x0)
+Invoke-Item $wkbk
 ########################################################################################################################
 ###### End of script ######## End of script ######## End of script ######## End of script ######## End of script #######
 ########################################################################################################################
