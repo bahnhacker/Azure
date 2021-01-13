@@ -4,6 +4,7 @@
 ## variables: set via prompts during execution
 ##
 ## change log:
+## 202101 - resolved errors with AzRecoveryServicesBackupProtectionPolicy 
 ## 202011 - restructured, updated, modules added for Security Center and Advisor
 ## 202006 - updated information included on the tabs for AzFramework and AzNetworking, added Disks, added BackupPolicies, added conditional formatting throughout
 ## 20200515 - restructure of how management group data is pulled, addition of AzFramework and AzNetworking worksheets
@@ -291,21 +292,27 @@ foreach ($line in $item)
         | Export-Excel -Path $wkbk -WorksheetName "AzFramework" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -MoveToStart -Append
     }
 }
-$item = Import-Excel -Path $wkbk -WorksheetName "RecoveryVault"
+$item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
-    Select-AzSubscription -Subscription $line.Subscription
-    Get-AzRecoveryServicesBackupProtectionPolicy -VaultId $line.Id `
-    | Select-Object @{n="Subscription";e={$line.Subscription -join ","}},@{n="VaultName";e={$line.Name -join ","}},Name,WorkloadType,SnapshotRetentionInDays,@{n="DailySchedule";e={$_.RetentionPolicy.IsDailyScheduleEnabled}},@{n="DailyRetention";e={$_.RetentionPolicy.DailySchedule.DurationCountInDays}},@{n="WeeklySchedule";e={$_.RetentionPolicy.IsWeeklyScheduleEnabled}},@{n="WeeklyRetention";e={$_.RetentionPolicy.WeeklySchedule.DurationCountInWeeks}},@{n="MonthlySchedule";e={$_.RetentionPolicy.IsMonthlyScheduleEnabled}},@{n="MonthlyRetention";e={$_.RetentionPolicy.MonthlySchedule.DurationCountInMonths}},@{n="YearlySchedule";e={$_.RetentionPolicy.IsYearlyScheduleEnabled}},@{n="YearlyRetention";e={$_.RetentionPolicy.YearlySchedule.DurationCountInYears}},Id,@{n="ParentID";e={$line.Id -join ","}} `
-    | Export-Excel -Path $wkbk -WorksheetName "RV-BackupPolicies" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    Select-AzSubscription -Subscription $line.Id
+    $value = Get-AzRecoveryServicesVault
+    if ($null -ne $value)
+    {
+        Select-AzSubscription -Subscription $line.Subscription
+        Get-AzRecoveryServicesBackupProtectionPolicy -VaultId $line.Id `
+        | Select-Object @{n="Subscription";e={$line.Subscription -join ","}},@{n="VaultName";e={$line.Name -join ","}},Name,WorkloadType,SnapshotRetentionInDays,@{n="DailySchedule";e={$_.RetentionPolicy.IsDailyScheduleEnabled}},@{n="DailyRetention";e={$_.RetentionPolicy.DailySchedule.DurationCountInDays}},@{n="WeeklySchedule";e={$_.RetentionPolicy.IsWeeklyScheduleEnabled}},@{n="WeeklyRetention";e={$_.RetentionPolicy.WeeklySchedule.DurationCountInWeeks}},@{n="MonthlySchedule";e={$_.RetentionPolicy.IsMonthlyScheduleEnabled}},@{n="MonthlyRetention";e={$_.RetentionPolicy.MonthlySchedule.DurationCountInMonths}},@{n="YearlySchedule";e={$_.RetentionPolicy.IsYearlyScheduleEnabled}},@{n="YearlyRetention";e={$_.RetentionPolicy.YearlySchedule.DurationCountInYears}},Id,@{n="ParentID";e={$line.Id -join ","}} `
+        | Export-Excel -Path $wkbk -WorksheetName "RV-BackupPolicies" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+        Export-Excel -Path $wkbk -WorksheetName "RV-BackupPolicies" -ConditionalText $(
+            New-ConditionalText -Range E2:E999 -ConditionalType GreaterThan -Text "7" red
+            New-ConditionalText -Range G2:G999 -ConditionalType GreaterThan -Text "7" red
+            New-ConditionalText -Range I2:I999 -ConditionalType GreaterThan -Text "4" red
+            New-ConditionalText -Range K2:K999 -ConditionalType GreaterThan -Text "12" red
+            New-ConditionalText -Range M2:M999 -ConditionalType GreaterThan -Text "1" red
+        )
+    }
 }
-Export-Excel -Path $wkbk -WorksheetName "RV-BackupPolicies" -ConditionalText $(
-    New-ConditionalText -Range E2:E999 -ConditionalType GreaterThan -Text "7" red
-    New-ConditionalText -Range G2:G999 -ConditionalType GreaterThan -Text "7" red
-    New-ConditionalText -Range I2:I999 -ConditionalType GreaterThan -Text "4" red
-    New-ConditionalText -Range K2:K999 -ConditionalType GreaterThan -Text "12" red
-    New-ConditionalText -Range M2:M999 -ConditionalType GreaterThan -Text "1" red
-)
+
 ## STORAGE ACCOUNT #####################################################################################################
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
@@ -337,9 +344,13 @@ $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
-    Get-AzDisk `
-    | Select-Object -Property @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,DiskSizeGB,DiskState,DiskIOPSReadWrite,DiskMBpsReadWrite,Encryption,Location,Sku,ManagedBy,UniqueID,Id `
-    | Export-Excel -Path $wkbk -WorksheetName "Disks" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    $value = Get-AzDisk
+    if ($null -ne $value)
+    {
+        Get-AzDisk `
+        | Select-Object @{n="Subscription";e={$line.Name -join ","}},Name,ResourceGroupName,DiskSizeGB,DiskState,DiskIOPSReadWrite,DiskMBpsReadWrite,Encryption,Location,Sku,ManagedBy,UniqueID,Id `
+        | Export-Excel -Path $wkbk -WorksheetName "Disks" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
 }
 Export-Excel -Path $wkbk -WorksheetName "Disks" -ConditionalText $(
     New-ConditionalText -Range E2:E999 -ConditionalType Equal -Text "Unattached" green
@@ -406,17 +417,25 @@ $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
-    Get-AzPolicyAssignment `
-    | Select-Object -Property @{n="PolicyID";e={$_.Name -join ","}},@{n="DisplayName";e={$_.Properties.displayName -join ","}},@{n="Enforcement";e={$_.Properties.enforcementMode -join ","}},@{n="Scope";e={$_.Properties.scope -join ","}},ResourceId `
-    | Export-Excel -Path $wkbk -WorksheetName "Policy" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    $value = Get-AzPolicyAssignment
+    if ($null -ne $value)
+    {
+        Get-AzPolicyAssignment `
+        | Select-Object -Property @{n="PolicyID";e={$_.Name -join ","}},@{n="DisplayName";e={$_.Properties.displayName -join ","}},@{n="Enforcement";e={$_.Properties.enforcementMode -join ","}},@{n="Scope";e={$_.Properties.scope -join ","}},ResourceId `
+        | Export-Excel -Path $wkbk -WorksheetName "Policy" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
 }
 $item = Import-Excel -Path $wkbk -WorksheetName "Sub"
 foreach ($line in $item)
 {
     Select-AzSubscription -Subscription $line.Id
-    Get-AzPolicyState `
-    | Select-Object -Property @{n="PolicyID";e={$_.PolicyAssignmentName -join ","}},PolicyDefinitionId,IsCompliant,ComplianceState,PolicyDefinitionAction,PolicyDefinitionCategory,SubscriptionId,PolicyAssignmentScope,ResourceId `
-    | Export-Excel -Path $wkbk -WorksheetName "PolicyState" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    $value = Get-AzPolicyState
+    if ($null -ne $value)
+    {
+        Get-AzPolicyState `
+        | Select-Object -Property @{n="PolicyID";e={$_.PolicyAssignmentName -join ","}},PolicyDefinitionId,IsCompliant,ComplianceState,PolicyDefinitionAction,PolicyDefinitionCategory,SubscriptionId,PolicyAssignmentScope,ResourceId `
+        | Export-Excel -Path $wkbk -WorksheetName "PolicyState" -BoldTopRow -AutoFilter -FreezeTopRow -AutoSize -Append
+    }
 }
 ## SECURITY CENTER #####################################################################################################
 Import-Module Az.Security
