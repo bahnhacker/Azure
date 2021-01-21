@@ -36,12 +36,12 @@ Import-Module ImportExcel
 Set-Item Env:\SuppressAzurePowerShellBreakingChangeWarnings "true"
 $client = Read-Host -Prompt "Client Name?"
 $dirid = Read-Host -Prompt "TenantID or AzureAD DirectoryID?"
-#$creds = Get-Credential
+$creds = Get-Credential
 $wshell = New-Object -ComObject Wscript.Shell
   $answer = $wshell.Popup("Is the Azure enviornment commercial cloud?",0,"Alert",0x4)
 if($answer -eq 6){
-    Connect-AzAccount -Tenant $dirid #-Credential $creds
-    Connect-AzureAD -TenantId $dirid #-Credential $creds
+    Connect-AzAccount -Tenant $dirid -Credential $creds
+    Connect-AzureAD -TenantId $dirid -Credential $creds
     }
 if($answer -eq 7){
     Connect-AzAccount -Tenant $dirid -Credential $creds -EnvironmentName AzureUSGovernment
