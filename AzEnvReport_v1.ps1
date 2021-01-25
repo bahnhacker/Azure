@@ -1,3 +1,7 @@
+## NOTICE: THIS VERSION OF THIS SCRIPT HAS BEEN UPDATED TO v2. PLEASE UTILIZE THE UPDATED VERSION ACCORDINGLY
+########################################################################################################################
+########################################################################################################################
+##
 ## script captures configurations and settings for key features and services in azure
 ## the script is intended to be ran as a whole and will pause for data verification at key points
 ##
