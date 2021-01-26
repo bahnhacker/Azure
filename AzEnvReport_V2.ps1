@@ -1,7 +1,7 @@
 ## script captures configurations and settings for key features and services in azure
 ## the script is intended to be ran as a whole and will pause for data verification at key points
 ##
-## execution example with switches: .\AzEnviReport.ps1 -path [folder path] -interactiveauth -skipvalidation 
+## execution example with switches: .\AzEnviReport_v2.ps1 -path [folder path] -interactiveauth -skipvalidation 
 ## switches; if not defined the script will prompt for the path
 ##    -path; allows the folder path to be defined
 ##    -interactiveauth; uses the web based auth, ideal for MFA
@@ -60,12 +60,12 @@ if ( !$InteractiveAuth ) {
     $wshell = New-Object -ComObject Wscript.Shell
     $answer = $wshell.Popup("Is the Azure enviornment commercial cloud?", 0, "Alert", 0x4)
     if ($answer -eq 6) {
-        Connect-AzAccount -Tenant $dirid -Credential $creds
-        Connect-AzureAD -TenantId $dirid -Credential $creds
+        Connect-AzAccount -Tenant $dirid #-Credential $creds
+        Connect-AzureAD -TenantId $dirid #-Credential $creds
     }
     if ($answer -eq 7) {
-        Connect-AzAccount -Tenant $dirid -Credential $creds -EnvironmentName AzureUSGovernment
-        Connect-AzureAD -TenantId $dirid -Credential $creds -AzureEnvironmentName AzureUSGovernment
+        Connect-AzAccount -Tenant $dirid -EnvironmentName AzureUSGovernment #-Credential $creds
+        Connect-AzureAD -TenantId $dirid -AzureEnvironmentName AzureUSGovernment #-Credential $creds
     }
 }
 else {
