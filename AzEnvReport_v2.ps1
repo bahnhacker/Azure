@@ -54,23 +54,25 @@ $dirid = ""
 # Authentication
 if ( !$InteractiveAuth ) {
     # Basic Auth
+    Disconnect-AzAccount
     $client = Read-Host -Prompt "Client Name?"  
     $dirid = Read-Host -Prompt "TenantID or AzureAD DirectoryID?" 
     $creds = Get-Credential
     $wshell = New-Object -ComObject Wscript.Shell
     $answer = $wshell.Popup("Is the Azure enviornment commercial cloud?", 0, "Alert", 0x4)
     if ($answer -eq 6) {
-        Connect-AzAccount -Tenant $dirid #-Credential $creds
-        Connect-AzureAD -TenantId $dirid #-Credential $creds
+        Connect-AzAccount -Tenant $dirid -Credential $creds
+        Connect-AzureAD -TenantId $dirid -Credential $creds
     }
     if ($answer -eq 7) {
-        Connect-AzAccount -Tenant $dirid -EnvironmentName AzureUSGovernment #-Credential $creds
-        Connect-AzureAD -TenantId $dirid -AzureEnvironmentName AzureUSGovernment #-Credential $creds
+        Connect-AzAccount -Tenant $dirid -EnvironmentName AzureUSGovernment -Credential $creds
+        Connect-AzureAD -TenantId $dirid -AzureEnvironmentName AzureUSGovernment -Credential $creds
     }
 }
 else {
     # Interactive Login
     # Azure
+    Disconnect-AzAccount
     $azContext = Get-AzContext
     while ( $null -eq $azContext ) { 
         $dirid = Read-Host -Prompt "TenantID or AzureAD DirectoryID?"
@@ -604,6 +606,7 @@ Export-Excel -Path $wkbk -WorksheetName "Advisor" -ConditionalText $(
     New-ConditionalText -Range D:D -ConditionalType Equal -Text High red
 )
 ########################################################################################################################
+Disconnect-AzAccount
 $wshell = New-Object -ComObject Wscript.Shell
 $wshell.Popup("The Azure Envioronment Report script has completed.", 0, "***COMPLETE***", 0x0)
 Invoke-Item $wkbk
