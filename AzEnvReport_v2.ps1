@@ -2,6 +2,7 @@
 ## the script is intended to be ran as a whole and will pause for data verification at key points
 ##
 ## execution example with switches: .\AzEnviReport_v2.ps1 -path [folder path] -interactiveauth -skipvalidation 
+## .\AzPowershell\AzEnvReport_v2.ps1 -InteractiveAuth -SkipValidation
 ## switches; if not defined the script will prompt for the path
 ##    -path; allows the folder path to be defined
 ##    -interactiveauth; uses the web based auth, ideal for MFA
